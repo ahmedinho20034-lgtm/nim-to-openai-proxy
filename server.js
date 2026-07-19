@@ -22,7 +22,7 @@ const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
 const SKIP_VALIDATION = process.env.SKIP_VALIDATION === 'true';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-const MAX_TOKENS_LIMIT = 65536;
+const MAX_TOKENS_LIMIT = 75536;
 const REQUEST_TIMEOUT_MS = 180000;
 const VALIDATION_TIMEOUT_MS = 15000;
 const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
@@ -242,6 +242,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const {
       model,
       messages,
+      top_p,
       temperature,
       max_tokens,
       stream
@@ -261,7 +262,8 @@ if (!primaryModel) {
 
     const baseRequest = {
       messages,
-      temperature: temperature ?? 0.7,
+      temperature: temperature ?? 1,
+      top_p: top_p ?? 1,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
       stream: stream || false,
       extra_body: ENABLE_THINKING_MODE
