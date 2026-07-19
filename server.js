@@ -271,9 +271,24 @@ if (!primaryModel) {
         : undefined
     };
 
-    const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
-    upstreamStream = response.data;
-    console.log('[PROXY] Model used:', usedModel);
+    const response = await axios.post(
+  `${NIM_API_BASE}/chat/completions`,
+  {
+    ...baseRequest,
+    model: primaryModel
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${NIM_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    responseType: stream ? 'stream' : 'json',
+    timeout: REQUEST_TIMEOUT_MS
+  }
+);
+
+upstreamStream = response.data;
+console.log('[PROXY] Model used:', primaryModel);
 
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
