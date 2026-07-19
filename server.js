@@ -23,9 +23,9 @@ const SKIP_VALIDATION = process.env.SKIP_VALIDATION === 'true';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 const MAX_TOKENS_LIMIT = 75536;
-const REQUEST_TIMEOUT_MS = 180000;
+const REQUEST_TIMEOUT_MS = 300000;
 const VALIDATION_TIMEOUT_MS = 15000;
-const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
+const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
 
 if (SHOW_REASONING) console.log('[CONFIG] Reasoning display: ENABLED');
 if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
@@ -77,7 +77,7 @@ const MODEL_MAPPING = {
 // ─── Middleware ─────────────────────────────────────────────────────────────
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // FIX: Extract token AFTER "Bearer " prefix, compare only the token
 // Prevents bypass when CLIENT_AUTH_KEY is empty (expected would be "Bearer " which is 7 chars)
