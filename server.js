@@ -332,14 +332,14 @@ console.log('[PROXY] Model used:', primaryModel);
 
             if (SHOW_REASONING) {
               if (reasoning && !reasoningOpen) {
-                content = `<thinking>\n${reasoning.replace(/\n/g, '\\n')}`;
+                content = `<think>\n${reasoning.replace(/\n/g, '\\n')}`;
                 reasoningOpen = true;
               } else if (reasoning) {
                 content = reasoning.replace(/\n/g, '\\n');
               }
 
               if (delta.content && reasoningOpen) {
-                content += `\n</thinking>\n\n${delta.content}`;
+                content += `\n</think>\n\n${delta.content}`;
                 reasoningOpen = false;
               }
             }
