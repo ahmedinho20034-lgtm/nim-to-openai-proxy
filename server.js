@@ -216,41 +216,6 @@ function safeWrite(res, data) {
   return false;
 }
 
-// ─── Helper: Fallback Chain ─────────────────────────────────────────────────
-
-async function callWithFallback(baseRequest, models) {
-  let lastError = null;
-
-  for (const model of models) {
-    try {
-      const res = await axios.post(
-        `${NIM_API_BASE}/chat/completions`,
-        { ...baseRequest, model },
-        {
-          headers: {
-            Authorization: `Bearer ${NIM_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          responseType: baseRequest.stream ? 'stream' : 'json',
-          timeout: REQUEST_TIMEOUT_MS
-        }
-      );
-
-      return { response: res, model };
-
-    } catch (err) {
-      lastError = err;
-      console.warn(
-        `[FALLBACK] Model failed: ${model}`,
-        err.response?.status,
-        err.response?.data?.error?.message || err.message
-      );
-    }
-  }
-
-  throw lastError || new Error('All models failed');
-}
-
 // ─── Routes ────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
@@ -282,8 +247,17 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream
     } = req.body;
 
-    const primaryModel = MODEL_MAPPING[model] || 'nvidia/llama-3.3-nemotron-super-49b-v1.5';
-    const modelChain = [primaryModel, ...FALLBACK_MODELS];
+    const primaryModel = MODEL_MAPPING[model];
+
+if (!primaryModel) {
+  return res.status(400).json({
+    error: {
+      message: `Unsupported model: ${model}`,
+      type: "invalid_request_error",
+      code: 400
+    }
+  });
+}
 
     const baseRequest = {
       messages,
