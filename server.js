@@ -303,6 +303,16 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     const primaryModel = MODEL_MAPPING[model];
 
+    if (!primaryModel) {
+  return res.status(400).json({
+    error: {
+      message: `Unsupported model: ${model}`,
+      type: "invalid_request_error",
+      code: 400
+    }
+  });
+    }
+
     // ─── One-Shot Search Trigger ───────────────────────────────────────────────
 
 let requestMessages = messages;
@@ -366,16 +376,6 @@ Prefer the supplied search results for current information.`
 
     requestMessages = messages;
   }
-}
-
-if (!primaryModel) {
-  return res.status(400).json({
-    error: {
-      message: `Unsupported model: ${model}`,
-      type: "invalid_request_error",
-      code: 400
-    }
-  });
 }
 
     const baseRequest = {
