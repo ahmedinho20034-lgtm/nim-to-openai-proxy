@@ -30,6 +30,19 @@ const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
 if (SHOW_REASONING) console.log('[CONFIG] Reasoning display: ENABLED');
 if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
 
+// ─── Web Search Configuration ───────────────────────────────────────────────
+
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+
+const SEARCH_TRIGGER = '[SEARCH]';
+const SEARCH_MAX_RESULTS = 5;
+
+if (TAVILY_API_KEY) {
+  console.log('[CONFIG] Web search: ENABLED');
+} else {
+  console.log('[CONFIG] Web search: DISABLED (TAVILY_API_KEY not configured)');
+}
+
 // ─── Config validation ──────────────────────────────────────────────────────
 
 function validateConfig() {
@@ -201,6 +214,46 @@ async function sendDiscordAlert(invalidModels) {
   }
 }
 
+// ─── One-Shot Web Search ────────────────────────────────────────────────────
+
+async function performWebSearch(query) {
+  if (!TAVILY_API_KEY) {
+    throw new Error('TAVILY_API_KEY is not configured.');
+  }
+
+  const response = await axios.post(
+    'https://api.tavily.com/search',
+    {
+      api_key: TAVILY_API_KEY,
+      query: query,
+      search_depth: 'basic',
+      max_results: SEARCH_MAX_RESULTS,
+      include_answer: false,
+      include_raw_content: false
+    },
+    {
+      timeout: 20000
+    }
+  );
+
+  return response.data.results || [];
+}
+
+function formatSearchResults(results) {
+  if (!results || results.length === 0) {
+    return 'No web search results were found.';
+  }
+
+  return results.map((result, index) => {
+    return [
+      `[SOURCE ${index + 1}]`,
+      `Title: ${result.title || 'Untitled'}`,
+      `URL: ${result.url || 'Unknown'}`,
+      `Content: ${result.content || ''}`
+    ].join('\n');
+  }).join('\n\n');
+}
+
 // ─── Helper: Safe Stream Writing ───────────────────────────────────────────
 
 // FIX: Wrap res.write in try/catch to prevent crashes on closed sockets
@@ -250,6 +303,71 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     const primaryModel = MODEL_MAPPING[model];
 
+    // ─── One-Shot Search Trigger ───────────────────────────────────────────────
+
+let requestMessages = messages;
+
+const latestUserMessage = [...messages]
+  .reverse()
+  .find(m => m.role === 'user');
+
+if (
+  latestUserMessage &&
+  typeof latestUserMessage.content === 'string' &&
+  latestUserMessage.content.trim().startsWith(SEARCH_TRIGGER)
+) {
+  const searchQuery = latestUserMessage.content
+    .trim()
+    .slice(SEARCH_TRIGGER.length)
+    .trim();
+
+  if (!searchQuery) {
+    return res.status(400).json({
+      error: {
+        message: 'Use [SEARCH] followed by what you want to search for.',
+        type: 'invalid_request_error',
+        code: 400
+      }
+    });
+  }
+
+  try {
+    console.log('[SEARCH] Searching:', searchQuery);
+
+    const searchResults = await performWebSearch(searchQuery);
+    const formattedResults = formatSearchResults(searchResults);
+
+    const cleanedUserMessage = {
+      ...latestUserMessage,
+      content: latestUserMessage.content
+        .replace(SEARCH_TRIGGER, '')
+        .trim()
+    };
+
+    requestMessages = [
+      ...messages.slice(0, -1),
+      cleanedUserMessage,
+      {
+        role: 'system',
+        content: `The user requested a web search.
+
+Use these fresh web search results when relevant:
+
+${formattedResults}
+
+Prefer the supplied search results for current information.`
+      }
+    ];
+
+    console.log(`[SEARCH] ${searchResults.length} result(s) received.`);
+
+  } catch (searchError) {
+    console.error('[SEARCH] Search failed:', searchError.message);
+
+    requestMessages = messages;
+  }
+}
+
 if (!primaryModel) {
   return res.status(400).json({
     error: {
@@ -261,7 +379,7 @@ if (!primaryModel) {
 }
 
     const baseRequest = {
-      messages,
+      messages: requestMessages,
       temperature: temperature ?? 1,
       top_p: top_p ?? 1,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
