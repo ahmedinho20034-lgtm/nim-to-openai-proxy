@@ -309,7 +309,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     // ─── One-Shot Search Trigger ───────────────────────────────────────────────
 
-  },let requestMessages = messages;
+  let requestMessages = messages;
 
 const latestUserIndex = [...messages]
   .map((message, index) => ({ message, index }))
@@ -382,7 +382,7 @@ If the search results do not contain enough information, say that the search res
 WEB SEARCH RESULTS:
 
 ${formattedResults}`
-
+  },
         ...messages.slice(0, messageIndex),
         cleanedUserMessage
       ];
