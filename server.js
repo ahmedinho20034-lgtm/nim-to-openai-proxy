@@ -333,10 +333,12 @@ if (latestUserIndex) {
 
   console.log('[SEARCH DEBUG] Latest user message:', content);
 
-  if (content.toUpperCase().startsWith(SEARCH_TRIGGER)) {
+  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
     const searchQuery = content
-      .slice(SEARCH_TRIGGER.length)
-      .trim();
+  .slice(
+    content.toUpperCase().indexOf(SEARCH_TRIGGER) + SEARCH_TRIGGER.length
+  )
+  .trim();
 
     if (!searchQuery) {
       return res.status(400).json({
