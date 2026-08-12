@@ -352,6 +352,19 @@ if (latestUserIndex) {
       console.log('[SEARCH] Searching:', searchQuery);
 
       const searchResults = await performWebSearch(searchQuery);
+
+      console.log('[SEARCH] Tavily returned:', searchResults.length, 'results');
+
+      if (searchResults.length === 0) {
+        console.warn('[SEARCH] Tavily returned ZERO results.');
+      }
+
+      searchResults.forEach((result, index) => {
+        console.log(
+          `[SEARCH RESULT ${index + 1}] ${result.title} | ${result.url}`
+        );
+      });
+
       const formattedResults = formatSearchResults(searchResults);
 
       const cleanedUserMessage = {
@@ -362,22 +375,26 @@ if (latestUserIndex) {
       requestMessages = [
         {
           role: 'system',
-          content: `The user requested a web search.
+          content: `WEB SEARCH INSTRUCTIONS:
 
-Use the following fresh web search results to answer the user's request.
+The user explicitly requested a web search.
+
+You MUST use the web search results below when answering.
+
+Do NOT answer from your previous knowledge when the search results contain the requested information.
+
+If the search results do not contain enough information, say that the search results were insufficient.
 
 WEB SEARCH RESULTS:
 
-${formattedResults}
-
-Use these search results as your primary source for current information.`
+${formattedResults}`
         },
         ...messages.slice(0, messageIndex),
         cleanedUserMessage
       ];
 
-      console.log(`[SEARCH] ${searchResults.length} result(s) received.`);
       console.log('[SEARCH] Search results injected into model context.');
+      console.log('[SEARCH DEBUG] Request now contains', requestMessages.length, 'messages.');
 
     } catch (searchError) {
       console.error('[SEARCH] Search failed:', searchError.message);
