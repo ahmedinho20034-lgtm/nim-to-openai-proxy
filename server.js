@@ -335,7 +335,7 @@ if (latestUserIndex) {
       ? latestUserMessage.content.trim()
       : '';
 
-  if (content.toUpperCase().startsWith(SEARCH_TRIGGER)) {
+  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
   const searchQuery = content
     .slice(SEARCH_TRIGGER.length)
     .trim();
@@ -416,8 +416,6 @@ ${formattedResults}`
         ? { chat_template_kwargs: { thinking: true } }
         : undefined
     };
-
-   const requestStartedAt = Date.now();
     
     const response = await axios.post(
   `${NIM_API_BASE}/chat/completions`,
@@ -434,8 +432,6 @@ ${formattedResults}`
     timeout: REQUEST_TIMEOUT_MS
   }
 );
-
-   console.log(`[LATENCY] NVIDIA request: ${Date.now() - requestStartedAt}ms`);
 
 upstreamStream = response.data;
 console.log('[PROXY] Model used:', primaryModel);
