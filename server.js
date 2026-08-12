@@ -301,8 +301,6 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream
     } = req.body;
 
-    console.log('[DEBUG] Incoming messages:', JSON.stringify(messages, null, 2));
-
     const primaryModel = MODEL_MAPPING[model];
 
     if (!primaryModel) {
@@ -314,71 +312,6 @@ app.post('/v1/chat/completions', async (req, res) => {
     }
   });
     }
-
-    // ─── One-Shot Search Trigger ───────────────────────────────────────────────
-
-let requestMessages = messages;
-
-const latestUserMessage = [...messages]
-  .reverse()
-  .find(m => m.role === 'user');
-
-if (
-  latestUserMessage &&
-  typeof latestUserMessage.content === 'string' &&
-  latestUserMessage.content.trim().startsWith(SEARCH_TRIGGER)
-) {
-  const searchQuery = latestUserMessage.content
-    .trim()
-    .slice(SEARCH_TRIGGER.length)
-    .trim();
-
-  if (!searchQuery) {
-    return res.status(400).json({
-      error: {
-        message: 'Use [SEARCH] followed by what you want to search for.',
-        type: 'invalid_request_error',
-        code: 400
-      }
-    });
-  }
-
-  try {
-    console.log('[SEARCH] Searching:', searchQuery);
-
-    const searchResults = await performWebSearch(searchQuery);
-    const formattedResults = formatSearchResults(searchResults);
-
-    const cleanedUserMessage = {
-      ...latestUserMessage,
-      content: latestUserMessage.content
-        .replace(SEARCH_TRIGGER, '')
-        .trim()
-    };
-
-    requestMessages = [
-      ...messages.slice(0, -1),
-      cleanedUserMessage,
-      {
-        role: 'system',
-        content: `The user requested a web search.
-
-Use these fresh web search results when relevant:
-
-${formattedResults}
-
-Prefer the supplied search results for current information.`
-      }
-    ];
-
-    console.log(`[SEARCH] ${searchResults.length} result(s) received.`);
-
-  } catch (searchError) {
-    console.error('[SEARCH] Search failed:', searchError.message);
-
-    requestMessages = messages;
-  }
-}
 
     const baseRequest = {
       messages: requestMessages,
