@@ -311,7 +311,81 @@ app.post('/v1/chat/completions', async (req, res) => {
       code: 400
     }
   });
+}
+
+    // ─── One-Shot Search Trigger ───────────────────────────────────────────────
+
+let requestMessages = messages;
+
+const latestUserIndex = [...messages]
+  .map((message, index) => ({ message, index }))
+  .reverse()
+  .find(item => item.message?.role === 'user');
+
+if (latestUserIndex) {
+  const latestUserMessage = latestUserIndex.message;
+  const messageIndex = latestUserIndex.index;
+
+  const content =
+    typeof latestUserMessage.content === 'string'
+      ? latestUserMessage.content.trim()
+      : '';
+
+  console.log('[SEARCH DEBUG] Latest user message:', content);
+
+  if (content.toUpperCase().startsWith(SEARCH_TRIGGER)) {
+    const searchQuery = content
+      .slice(SEARCH_TRIGGER.length)
+      .trim();
+
+    if (!searchQuery) {
+      return res.status(400).json({
+        error: {
+          message: 'Use [SEARCH] followed by what you want to search for.',
+          type: 'invalid_request_error',
+          code: 400
+        }
+      });
     }
+
+    try {
+      console.log('[SEARCH] Searching:', searchQuery);
+
+      const searchResults = await performWebSearch(searchQuery);
+      const formattedResults = formatSearchResults(searchResults);
+
+      const cleanedUserMessage = {
+        ...latestUserMessage,
+        content: searchQuery
+      };
+
+      requestMessages = [
+        {
+          role: 'system',
+          content: `The user requested a web search.
+
+Use the following fresh web search results to answer the user's request.
+
+WEB SEARCH RESULTS:
+
+${formattedResults}
+
+Use these search results as your primary source for current information.`
+        },
+        ...messages.slice(0, messageIndex),
+        cleanedUserMessage
+      ];
+
+      console.log(`[SEARCH] ${searchResults.length} result(s) received.`);
+      console.log('[SEARCH] Search results injected into model context.');
+
+    } catch (searchError) {
+      console.error('[SEARCH] Search failed:', searchError.message);
+
+      requestMessages = messages;
+    }
+  }
+}
 
     const baseRequest = {
       messages: requestMessages,
