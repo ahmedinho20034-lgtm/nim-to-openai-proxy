@@ -307,6 +307,16 @@ app.post('/v1/chat/completions', async (req, res) => {
   });
 }
 
+    if (!Array.isArray(messages) || messages.length === 0) {
+  return res.status(400).json({
+    error: {
+      message: '"messages" must be a non-empty array.',
+      type: 'invalid_request_error',
+      code: 400
+    }
+  });
+}
+
     // ─── One-Shot Search Trigger ───────────────────────────────────────────────
 
   let requestMessages = messages;
@@ -325,7 +335,7 @@ if (latestUserIndex) {
       ? latestUserMessage.content.trim()
       : '';
 
-  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
+  if (content.toUpperCase().startsWith(SEARCH_TRIGGER)) {
   const searchQuery = content
     .slice(SEARCH_TRIGGER.length)
     .trim();
@@ -407,7 +417,7 @@ ${formattedResults}`
         : undefined
     };
 
-   console.time('[LATENCY] NVIDIA request');
+   const requestStartedAt = Date.now();
     
     const response = await axios.post(
   `${NIM_API_BASE}/chat/completions`,
@@ -425,7 +435,7 @@ ${formattedResults}`
   }
 );
 
-   console.timeEnd('[LATENCY] NVIDIA request');
+   console.log(`[LATENCY] NVIDIA request: ${Date.now() - requestStartedAt}ms`);
 
 upstreamStream = response.data;
 console.log('[PROXY] Model used:', primaryModel);
@@ -471,17 +481,28 @@ console.log('[PROXY] Model used:', primaryModel);
             const reasoning = delta.reasoning_content;
 
             if (SHOW_REASONING) {
-              if (reasoning && !reasoningOpen) {
-                content = `<think>\n${reasoning.replace(/\n/g, '\\n')}`;
+              if (reasoning) {
+                // Reasoning present this chunk: open the tag if needed, then
+                // use ONLY the reasoning text (never delta.content) so we
+                // don't duplicate anything.
+                content = reasoningOpen ? reasoning : `<think>\n${reasoning}`;
                 reasoningOpen = true;
-              } else if (reasoning) {
-                content = reasoning.replace(/\n/g, '\\n');
-              }
 
-              if (delta.content && reasoningOpen) {
-                content += `\n</think>\n\n${delta.content}`;
+                // Boundary chunk: this same delta also carries real content,
+                // so close the tag and append it exactly once.
+                if (delta.content) {
+                  content += `\n</think>\n\n${delta.content}`;
+                  reasoningOpen = false;
+                }
+              } else if (delta.content && reasoningOpen) {
+                // Reasoning finished in an earlier chunk; this chunk is pure
+                // content. Close the tag and use delta.content exactly once
+                // (it must NOT also be sitting in `content` from the top).
+                content = `\n</think>\n\n${delta.content}`;
                 reasoningOpen = false;
               }
+              // else: ordinary content chunk, nothing to do — content is
+              // already delta.content from initialization above.
             }
 
             delta.content = content;
@@ -591,8 +612,7 @@ console.log('[PROXY] Model used:', primaryModel);
           let content = choice.message?.content || '';
 
           if (SHOW_REASONING && choice.message?.reasoning_content) {
-            const safeReasoning = choice.message.reasoning_content.replace(/\n/g, '\\n');
-            content = `<thinking>\n${safeReasoning}\n</thinking>\n\n${content}`;
+            content = `<think>\n${choice.message.reasoning_content}\n</think>\n\n${content}`;
           }
 
           return {
