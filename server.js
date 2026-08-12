@@ -35,13 +35,7 @@ if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
 const SEARCH_TRIGGER = '[SEARCH]';
-const SEARCH_MAX_RESULTS = 5;
-
-if (TAVILY_API_KEY) {
-  console.log('[CONFIG] Web search: ENABLED');
-} else {
-  console.log('[CONFIG] Web search: DISABLED (TAVILY_API_KEY not configured)');
-}
+const SEARCH_MAX_RESULTS = 8;
 
 // ─── Config validation ──────────────────────────────────────────────────────
 
@@ -315,7 +309,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     // ─── One-Shot Search Trigger ───────────────────────────────────────────────
 
-let requestMessages = messages;
+  },let requestMessages = messages;
 
 const latestUserIndex = [...messages]
   .map((message, index) => ({ message, index }))
@@ -388,7 +382,7 @@ If the search results do not contain enough information, say that the search res
 WEB SEARCH RESULTS:
 
 ${formattedResults}`
-        },
+
         ...messages.slice(0, messageIndex),
         cleanedUserMessage
       ];
