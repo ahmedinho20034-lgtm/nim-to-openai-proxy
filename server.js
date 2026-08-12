@@ -331,8 +331,6 @@ if (latestUserIndex) {
       ? latestUserMessage.content.trim()
       : '';
 
-  console.log('[SEARCH DEBUG] Latest user message:', content);
-
   if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
     const searchQuery = content
   .slice(
