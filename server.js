@@ -325,12 +325,11 @@ if (latestUserIndex) {
       ? latestUserMessage.content.trim()
       : '';
 
-  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
-    const searchQuery = content
-  .slice(
-    content.toUpperCase().indexOf(SEARCH_TRIGGER) + SEARCH_TRIGGER.length
-  )
-  .trim();
+  const searchMatch = content.match(/^\s*(?:[^:]+:\s*)?\[SEARCH\]\s*(.*)$/i);
+
+if (searchMatch) {
+  const searchQuery = searchMatch[1].trim();
+}
 
     if (!searchQuery) {
       return res.status(400).json({
