@@ -301,6 +301,8 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream
     } = req.body;
 
+    console.log('[DEBUG] Incoming messages:', JSON.stringify(messages, null, 2));
+
     const primaryModel = MODEL_MAPPING[model];
 
     if (!primaryModel) {
