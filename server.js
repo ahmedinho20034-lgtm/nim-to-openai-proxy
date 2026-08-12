@@ -409,6 +409,8 @@ ${formattedResults}`
         : undefined
     };
 
+   console.time('[LATENCY] NVIDIA request');
+    
     const response = await axios.post(
   `${NIM_API_BASE}/chat/completions`,
   {
@@ -424,6 +426,8 @@ ${formattedResults}`
     timeout: REQUEST_TIMEOUT_MS
   }
 );
+
+   console.timeEnd('[LATENCY] NVIDIA request');
 
 upstreamStream = response.data;
 console.log('[PROXY] Model used:', primaryModel);
