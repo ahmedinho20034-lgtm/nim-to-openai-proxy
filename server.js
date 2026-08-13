@@ -30,13 +30,6 @@ const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
 if (SHOW_REASONING) console.log('[CONFIG] Reasoning display: ENABLED');
 if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
 
-// ─── Web Search Configuration ───────────────────────────────────────────────
-
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
-
-const SEARCH_TRIGGER = '[SEARCH]';
-const SEARCH_MAX_RESULTS = 8;
-
 // ─── Config validation ──────────────────────────────────────────────────────
 
 function validateConfig() {
@@ -208,46 +201,6 @@ async function sendDiscordAlert(invalidModels) {
   }
 }
 
-// ─── One-Shot Web Search ────────────────────────────────────────────────────
-
-async function performWebSearch(query) {
-  if (!TAVILY_API_KEY) {
-    throw new Error('TAVILY_API_KEY is not configured.');
-  }
-
-  const response = await axios.post(
-    'https://api.tavily.com/search',
-    {
-      api_key: TAVILY_API_KEY,
-      query: query,
-      search_depth: 'basic',
-      max_results: SEARCH_MAX_RESULTS,
-      include_answer: false,
-      include_raw_content: false
-    },
-    {
-      timeout: 20000
-    }
-  );
-
-  return response.data.results || [];
-}
-
-function formatSearchResults(results) {
-  if (!results || results.length === 0) {
-    return 'No web search results were found.';
-  }
-
-  return results.map((result, index) => {
-    return [
-      `[SOURCE ${index + 1}]`,
-      `Title: ${result.title || 'Untitled'}`,
-      `URL: ${result.url || 'Unknown'}`,
-      `Content: ${result.content || ''}`
-    ].join('\n');
-  }).join('\n\n');
-}
-
 // ─── Helper: Safe Stream Writing ───────────────────────────────────────────
 
 // FIX: Wrap res.write in try/catch to prevent crashes on closed sockets
@@ -297,7 +250,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     const primaryModel = MODEL_MAPPING[model];
 
-    if (!primaryModel) {
+if (!primaryModel) {
   return res.status(400).json({
     error: {
       message: `Unsupported model: ${model}`,
@@ -307,107 +260,8 @@ app.post('/v1/chat/completions', async (req, res) => {
   });
 }
 
-    if (!Array.isArray(messages) || messages.length === 0) {
-  return res.status(400).json({
-    error: {
-      message: '"messages" must be a non-empty array.',
-      type: 'invalid_request_error',
-      code: 400
-    }
-  });
-}
-
-    // ─── One-Shot Search Trigger ───────────────────────────────────────────────
-
-  let requestMessages = messages;
-
-const latestUserIndex = [...messages]
-  .map((message, index) => ({ message, index }))
-  .reverse()
-  .find(item => item.message?.role === 'user');
-
-if (latestUserIndex) {
-  const latestUserMessage = latestUserIndex.message;
-  const messageIndex = latestUserIndex.index;
-
-  const content =
-    typeof latestUserMessage.content === 'string'
-      ? latestUserMessage.content.trim()
-      : '';
-
-  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
-  const searchQuery = content
-    .slice(SEARCH_TRIGGER.length)
-    .trim();
-
-    if (!searchQuery) {
-      return res.status(400).json({
-        error: {
-          message: 'Use [SEARCH] followed by what you want to search for.',
-          type: 'invalid_request_error',
-          code: 400
-        }
-      });
-    }
-
-    try {
-      console.log('[SEARCH] Searching:', searchQuery);
-
-      const searchResults = await performWebSearch(searchQuery);
-
-      console.log('[SEARCH] Tavily returned:', searchResults.length, 'results');
-
-      if (searchResults.length === 0) {
-        console.warn('[SEARCH] Tavily returned ZERO results.');
-      }
-
-      searchResults.forEach((result, index) => {
-        console.log(
-          `[SEARCH RESULT ${index + 1}] ${result.title} | ${result.url}`
-        );
-      });
-
-      const formattedResults = formatSearchResults(searchResults);
-
-      const cleanedUserMessage = {
-        ...latestUserMessage,
-        content: searchQuery
-      };
-
-      requestMessages = [
-        {
-          role: 'system',
-          content: `WEB SEARCH INSTRUCTIONS:
-
-The user explicitly requested a web search.
-
-You MUST use the web search results below when answering.
-
-Do NOT answer from your previous knowledge when the search results contain the requested information.
-
-If the search results do not contain enough information, say that the search results were insufficient.
-
-WEB SEARCH RESULTS:
-
-${formattedResults}`
-  },
-        ...messages.slice(0, messageIndex),
-        cleanedUserMessage
-      ];
-
-      console.log('[SEARCH] Search results injected into model context.');
-      console.log('[SEARCH DEBUG] Request now contains', requestMessages.length, 'messages.');
-
-    } catch (searchError) {
-      console.error('[SEARCH] Search failed:', searchError.message);
-
-      requestMessages = messages;
-    }
-  }
-}
-
     const baseRequest = {
-      messages: requestMessages,
+      messages,
       temperature: temperature ?? 1,
       top_p: top_p ?? 1,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
@@ -416,7 +270,7 @@ ${formattedResults}`
         ? { chat_template_kwargs: { thinking: true } }
         : undefined
     };
-    
+
     const response = await axios.post(
   `${NIM_API_BASE}/chat/completions`,
   {
@@ -477,28 +331,17 @@ console.log('[PROXY] Model used:', primaryModel);
             const reasoning = delta.reasoning_content;
 
             if (SHOW_REASONING) {
-              if (reasoning) {
-                // Reasoning present this chunk: open the tag if needed, then
-                // use ONLY the reasoning text (never delta.content) so we
-                // don't duplicate anything.
-                content = reasoningOpen ? reasoning : `<think>\n${reasoning}`;
+              if (reasoning && !reasoningOpen) {
+                content = `<think>\n${reasoning.replace(/\n/g, '\\n')}`;
                 reasoningOpen = true;
+              } else if (reasoning) {
+                content = reasoning.replace(/\n/g, '\\n');
+              }
 
-                // Boundary chunk: this same delta also carries real content,
-                // so close the tag and append it exactly once.
-                if (delta.content) {
-                  content += `\n</think>\n\n${delta.content}`;
-                  reasoningOpen = false;
-                }
-              } else if (delta.content && reasoningOpen) {
-                // Reasoning finished in an earlier chunk; this chunk is pure
-                // content. Close the tag and use delta.content exactly once
-                // (it must NOT also be sitting in `content` from the top).
-                content = `\n</think>\n\n${delta.content}`;
+              if (delta.content && reasoningOpen) {
+                content += `\n</think>\n\n${delta.content}`;
                 reasoningOpen = false;
               }
-              // else: ordinary content chunk, nothing to do — content is
-              // already delta.content from initialization above.
             }
 
             delta.content = content;
@@ -608,7 +451,8 @@ console.log('[PROXY] Model used:', primaryModel);
           let content = choice.message?.content || '';
 
           if (SHOW_REASONING && choice.message?.reasoning_content) {
-            content = `<think>\n${choice.message.reasoning_content}\n</think>\n\n${content}`;
+            const safeReasoning = choice.message.reasoning_content.replace(/\n/g, '\\n');
+            content = `<thinking>\n${safeReasoning}\n</thinking>\n\n${content}`;
           }
 
           return {
