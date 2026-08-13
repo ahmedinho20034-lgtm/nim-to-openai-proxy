@@ -79,6 +79,47 @@ const MODEL_MAPPING = {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// TEMPORARY NVIDIA DIRECT TEST
+app.get('/direct-nvidia-test', async (req, res) => {
+  try {
+    const response = await axios.post(
+      'https://integrate.api.nvidia.com/v1/chat/completions',
+      {
+        model: 'z-ai/glm-5.2',
+        messages: [
+          {
+            role: 'user',
+            content: 'Say hello.'
+          }
+        ],
+        max_tokens: 7,
+        stream: false
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${NIM_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    res.status(200).json({
+      test: 'SUCCESS',
+      nvidia_status: response.status,
+      response: response.data
+    });
+
+  } catch (error) {
+    res.status(error.response?.status || 500).json({
+      test: 'FAILED',
+      nvidia_status: error.response?.status || null,
+      nvidia_response: error.response?.data || null,
+      retry_after: error.response?.headers?.['retry-after'] || null
+    });
+  }
+});
+
 // FIX: Extract token AFTER "Bearer " prefix, compare only the token
 // Prevents bypass when CLIENT_AUTH_KEY is empty (expected would be "Bearer " which is 7 chars)
 function extractBearerToken(authHeader) {
@@ -517,46 +558,6 @@ app.use((req, res) => {
 });
 
 // ─── Startup ───────────────────────────────────────────────────────────────
-app.get('/direct-nvidia-test', async (req, res) => {
-  try {
-    const response = await axios.post(
-      'https://integrate.api.nvidia.com/v1/chat/completions',
-      {
-        model: 'z-ai/glm-5.2',
-        messages: [
-          {
-            role: 'user',
-            content: 'Say hello.'
-          }
-        ],
-        max_tokens: 7,
-        stream: false
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.NIM_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-
-    res.status(200).json({
-      test: 'SUCCESS',
-      nvidia_status: response.status,
-      response: response.data
-    });
-
-  } catch (error) {
-    res.status(error.response?.status || 500).json({
-      test: 'FAILED',
-      nvidia_status: error.response?.status || null,
-      nvidia_response: error.response?.data || null,
-      retry_after: error.response?.headers?.['retry-after'] || null
-    });
-  }
-});
-
 app.listen(PORT, () => {
   console.log(`[PROXY] Hybrid proxy running on port ${PORT}`);
   console.log(`[PROXY] Max tokens limit: ${MAX_TOKENS_LIMIT}`);
