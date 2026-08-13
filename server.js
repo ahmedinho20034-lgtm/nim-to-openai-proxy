@@ -19,23 +19,13 @@ const CLIENT_AUTH_KEY = process.env.CLIENT_AUTH_KEY;
 
 const SHOW_REASONING = process.env.SHOW_REASONING === 'true';
 const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
-const SKIP_VALIDATION = process.env.SKIP_VALIDATION === 'true';
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 const MAX_TOKENS_LIMIT = 75536;
 const REQUEST_TIMEOUT_MS = 300000;
-const VALIDATION_TIMEOUT_MS = 15000;
 const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
 
 if (SHOW_REASONING) console.log('[CONFIG] Reasoning display: ENABLED');
 if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
-
-// ─── Web Search Configuration ───────────────────────────────────────────────
-
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
-
-const SEARCH_TRIGGER = '[SEARCH]';
-const SEARCH_MAX_RESULTS = 8;
 
 // ─── Config validation ──────────────────────────────────────────────────────
 
@@ -134,122 +124,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Validation ─────────────────────────────────────────────────────────────
-
-// FIX: Use lightweight model listing instead of burning inference quota
-// If NIM doesn't support /models, skip validation entirely rather than DDoS-ing yourself
-async function validateModels() {
-  if (SKIP_VALIDATION) {
-    console.log('[VALIDATION] Skipped (SKIP_VALIDATION=true)');
-    return;
-  }
-
-  console.log('[VALIDATION] Checking model availability via /v1/models...');
-
-  try {
-    const response = await axios.get(`${NIM_API_BASE}/models`, {
-      headers: {
-        Authorization: `Bearer ${NIM_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: VALIDATION_TIMEOUT_MS
-    });
-
-    const availableModels = new Set(
-      (response.data.data || []).map(m => m.id)
-    );
-
-    const invalid = [];
-    
-    for (const [alias, nimId] of Object.entries(MODEL_MAPPING)) {
-      if (availableModels.has(nimId)) {
-        console.log(`[VALIDATION] ✓ ${alias} → ${nimId}`);
-      } else {
-        console.warn(`[VALIDATION] ✗ ${alias} → ${nimId} (not in catalog)`);
-        invalid.push({ alias, nimId, error: 'Model not found in NIM catalog' });
-      }
-    }
-
-    if (invalid.length > 0) {
-      await sendDiscordAlert(invalid);
-    } else {
-      console.log('[VALIDATION] All models valid.');
-    }
-
-  } catch (err) {
-    console.warn(`[VALIDATION] /v1/models endpoint failed: ${err.message}. Skipping validation.`);
-    console.warn('[VALIDATION] Consider setting SKIP_VALIDATION=true if your NIM provider lacks a model listing endpoint.');
-  }
-}
-
-async function sendDiscordAlert(invalidModels) {
-  if (!DISCORD_WEBHOOK_URL) return;
-
-  const embed = {
-    title: '⚠️ NIM Proxy: Model Validation Failed',
-    description: `${invalidModels.length} model(s) failed validation. Check NIM catalog for deprecations.`,
-    color: 0xff4444,
-    timestamp: new Date().toISOString(),
-    fields: invalidModels.map(m => ({
-      name: `\`${m.alias}\``,
-      value: `Backend: \`${m.nimId}\`\nError: \`${m.error}\``,
-      inline: true
-    }))
-  };
-
-  try {
-    await axios.post(DISCORD_WEBHOOK_URL, {
-      embeds: [embed],
-      username: 'NIM Proxy Monitor'
-    }, { timeout: 5000 });
-    console.log('[DISCORD] Alert sent.');
-  } catch (err) {
-    console.error('[DISCORD] Failed to send alert:', err.message);
-  }
-}
-
-// ─── One-Shot Web Search ────────────────────────────────────────────────────
-
-async function performWebSearch(query) {
-  if (!TAVILY_API_KEY) {
-    throw new Error('TAVILY_API_KEY is not configured.');
-  }
-
-  const response = await axios.post(
-    'https://api.tavily.com/search',
-    {
-      api_key: TAVILY_API_KEY,
-      query: query,
-      search_depth: 'basic',
-      max_results: SEARCH_MAX_RESULTS,
-      include_answer: false,
-      include_raw_content: false
-    },
-    {
-      timeout: 20000
-    }
-  );
-
-  return response.data.results || [];
-}
-
-function formatSearchResults(results) {
-  if (!results || results.length === 0) {
-    return 'No web search results were found.';
-  }
-
-  return results.map((result, index) => {
-    return [
-      `[SOURCE ${index + 1}]`,
-      `Title: ${result.title || 'Untitled'}`,
-      `URL: ${result.url || 'Unknown'}`,
-      `Content: ${result.content || ''}`
-    ].join('\n');
-  }).join('\n\n');
-}
-
 // ─── Helper: Safe Stream Writing ───────────────────────────────────────────
-
 // FIX: Wrap res.write in try/catch to prevent crashes on closed sockets
 function safeWrite(res, data) {
   try {
@@ -317,97 +192,8 @@ app.post('/v1/chat/completions', async (req, res) => {
   });
 }
 
-    // ─── One-Shot Search Trigger ───────────────────────────────────────────────
-
-  let requestMessages = messages;
-
-const latestUserIndex = [...messages]
-  .map((message, index) => ({ message, index }))
-  .reverse()
-  .find(item => item.message?.role === 'user');
-
-if (latestUserIndex) {
-  const latestUserMessage = latestUserIndex.message;
-  const messageIndex = latestUserIndex.index;
-
-  const content =
-    typeof latestUserMessage.content === 'string'
-      ? latestUserMessage.content.trim()
-      : '';
-
-  if (content.toUpperCase().includes(SEARCH_TRIGGER)) {
-  const searchQuery = content
-    .slice(SEARCH_TRIGGER.length)
-    .trim();
-
-    if (!searchQuery) {
-      return res.status(400).json({
-        error: {
-          message: 'Use [SEARCH] followed by what you want to search for.',
-          type: 'invalid_request_error',
-          code: 400
-        }
-      });
-    }
-
-    try {
-      console.log('[SEARCH] Searching:', searchQuery);
-
-      const searchResults = await performWebSearch(searchQuery);
-
-      console.log('[SEARCH] Tavily returned:', searchResults.length, 'results');
-
-      if (searchResults.length === 0) {
-        console.warn('[SEARCH] Tavily returned ZERO results.');
-      }
-
-      searchResults.forEach((result, index) => {
-        console.log(
-          `[SEARCH RESULT ${index + 1}] ${result.title} | ${result.url}`
-        );
-      });
-
-      const formattedResults = formatSearchResults(searchResults);
-
-      const cleanedUserMessage = {
-        ...latestUserMessage,
-        content: searchQuery
-      };
-
-      requestMessages = [
-        {
-          role: 'system',
-          content: `WEB SEARCH INSTRUCTIONS:
-
-The user explicitly requested a web search.
-
-You MUST use the web search results below when answering.
-
-Do NOT answer from your previous knowledge when the search results contain the requested information.
-
-If the search results do not contain enough information, say that the search results were insufficient.
-
-WEB SEARCH RESULTS:
-
-${formattedResults}`
-  },
-        ...messages.slice(0, messageIndex),
-        cleanedUserMessage
-      ];
-
-      console.log('[SEARCH] Search results injected into model context.');
-      console.log('[SEARCH DEBUG] Request now contains', requestMessages.length, 'messages.');
-
-    } catch (searchError) {
-      console.error('[SEARCH] Search failed:', searchError.message);
-
-      requestMessages = messages;
-    }
-  }
-}
-
     const baseRequest = {
-      messages: requestMessages,
+      messages,
       temperature: temperature ?? 1,
       top_p: top_p ?? 1,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
@@ -677,10 +463,4 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`[PROXY] Hybrid proxy running on port ${PORT}`);
   console.log(`[PROXY] Max tokens limit: ${MAX_TOKENS_LIMIT}`);
-  
-  // Run validation after server starts, non-blocking
-  validateModels().catch(err => {
-    console.error('[VALIDATION] Startup check failed:', err.message);
-  });
 });
-  
