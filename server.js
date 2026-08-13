@@ -85,7 +85,7 @@ app.get('/direct-nvidia-test', async (req, res) => {
     const response = await axios.post(
       'https://integrate.api.nvidia.com/v1/chat/completions',
       {
-        model: 'nemotron-3-ultra-550b-a55b',
+        model: 'gpt-4',
         messages: [
           {
             role: 'user',
