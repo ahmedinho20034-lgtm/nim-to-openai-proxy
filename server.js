@@ -22,10 +22,10 @@ const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
 const SKIP_VALIDATION = process.env.SKIP_VALIDATION === 'true';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-const MAX_TOKENS_LIMIT = 75536;
+const MAX_TOKENS_LIMIT = 75546;
 const REQUEST_TIMEOUT_MS = 300000;
 const VALIDATION_TIMEOUT_MS = 15000;
-const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
+const MAX_BUFFER_SIZE = 9 * 1024 * 1024; // 9MB
 
 if (SHOW_REASONING) console.log('[CONFIG] Reasoning display: ENABLED');
 if (ENABLE_THINKING_MODE) console.log('[CONFIG] Thinking mode: ENABLED');
