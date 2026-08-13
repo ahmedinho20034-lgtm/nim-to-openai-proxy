@@ -517,52 +517,42 @@ app.use((req, res) => {
 });
 
 // ─── Startup ───────────────────────────────────────────────────────────────
-app.get('/test-nvidia', async (req, res) => {
+app.get('/direct-nvidia-test', async (req, res) => {
   try {
-    console.log('[TEST] Sending direct request to NVIDIA...');
-
     const response = await axios.post(
-      `${NIM_API_BASE}/chat/completions`,
+      'https://integrate.api.nvidia.com/v1/chat/completions',
       {
-        model: primaryModel,
+        model: 'z-ai/glm-5.2',
         messages: [
           {
             role: 'user',
-            content: 'Say hello in one word.'
+            content: 'Say hello.'
           }
         ],
-        max_tokens: 10,
+        max_tokens: 7,
         stream: false
       },
       {
         headers: {
-          Authorization: `Bearer ${NIM_API_KEY}`,
+          'Authorization': `Bearer ${process.env.NIM_API_KEY}`,
           'Content-Type': 'application/json'
         },
         timeout: 30000
       }
     );
 
-    console.log('[TEST] NVIDIA SUCCESS:', response.status);
-
-    res.json({
-      success: true,
-      status: response.status,
+    res.status(200).json({
+      test: 'SUCCESS',
+      nvidia_status: response.status,
       response: response.data
     });
 
   } catch (error) {
-    console.error('[TEST] NVIDIA FAILED');
-
-    console.error('[TEST] Status:', error.response?.status);
-    console.error('[TEST] Data:', error.response?.data);
-    console.error('[TEST] Retry-After:', error.response?.headers?.['retry-after']);
-
-    res.status(500).json({
-      success: false,
-      status: error.response?.status,
-      error: error.response?.data,
-      retryAfter: error.response?.headers?.['retry-after']
+    res.status(error.response?.status || 500).json({
+      test: 'FAILED',
+      nvidia_status: error.response?.status || null,
+      nvidia_response: error.response?.data || null,
+      retry_after: error.response?.headers?.['retry-after'] || null
     });
   }
 });
