@@ -228,7 +228,7 @@ app.post('/v1/chat/completions', async (req, res) => {
             messages,
             temperature: temperature ?? 1,
             top_p: top_p ?? 1,
-            max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
+            max_tokens: Math.min(max_tokens ?? 4096, MAX_TOKENS_LIMIT),
             stream: stream || false,
             extra_body: ENABLE_THINKING_MODE
                 ? { chat_template_kwargs: { thinking: true } }
@@ -358,6 +358,7 @@ app.post('/v1/chat/completions', async (req, res) => {
                     safeWrite(res, 'data: [DONE]\n\n');
                     res.end();
                     upstreamStream.destroy();
+                    releaseNimRequestSlot()
                     cleanup();
                     return;
                 }
