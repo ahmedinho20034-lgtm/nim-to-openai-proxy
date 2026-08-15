@@ -15,9 +15,9 @@ const NIM_API_KEY = process.env.NIM_API_KEY;
 const CLIENT_AUTH_KEY = process.env.CLIENT_AUTH_KEY;
 const SHOW_REASONING = process.env.SHOW_REASONING === 'true';
 const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
-const MAX_TOKENS_LIMIT = 8192;
+const MAX_TOKENS_LIMIT = 75536;
 const REQUEST_TIMEOUT_MS = 300000;
-const MAX_BUFFER_SIZE = 6 * 1024 * 1024; // 6MB
+const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
 
 // ─── Upstream concurrency control ────────────────────────────────────────────
 // Default: only 1 active NIM inference at a time.
