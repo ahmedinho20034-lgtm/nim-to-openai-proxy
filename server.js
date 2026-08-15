@@ -358,7 +358,6 @@ app.post('/v1/chat/completions', async (req, res) => {
                     safeWrite(res, 'data: [DONE]\n\n');
                     res.end();
                     upstreamStream.destroy();
-                    releaseNimRequestSlot()
                     cleanup();
                     return;
                 }
