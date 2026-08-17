@@ -15,14 +15,14 @@ const NIM_API_KEY = process.env.NIM_API_KEY;
 const CLIENT_AUTH_KEY = process.env.CLIENT_AUTH_KEY;
 const SHOW_REASONING = process.env.SHOW_REASONING === 'true';
 const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
-const MAX_TOKENS_LIMIT = 75536;
+const MAX_TOKENS_LIMIT = 65536;
 const REQUEST_TIMEOUT_MS = 300000;
-const MAX_BUFFER_SIZE = 7 * 1024 * 1024; // 7MB
+const MAX_BUFFER_SIZE = 6 * 1024 * 1024; // 7MB
 
 // ─── Upstream concurrency control ────────────────────────────────────────────
-// Default: only 1 active NIM inference at a time.
+// Default: only 2 active NIM inference at a time.
 // Additional requests wait locally instead of hitting NIM simultaneously.
-const MAX_CONCURRENT_NIM_REQUESTS = Math.max(1, Number(process.env.MAX_CONCURRENT_NIM_REQUESTS || 1));
+const MAX_CONCURRENT_NIM_REQUESTS = Math.max(2, Number(process.env.MAX_CONCURRENT_NIM_REQUESTS || 2));
 let activeNimRequests = 0;
 const nimRequestQueue = [];
 
