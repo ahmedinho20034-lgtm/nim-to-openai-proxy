@@ -16,7 +16,7 @@ const CLIENT_AUTH_KEY = process.env.CLIENT_AUTH_KEY;
 const SHOW_REASONING = process.env.SHOW_REASONING === 'true';
 const ENABLE_THINKING_MODE = process.env.ENABLE_THINKING_MODE === 'true';
 const MAX_TOKENS_LIMIT = 65536;
-const REQUEST_TIMEOUT_MS = 300000;
+const REQUEST_TIMEOUT_MS = 300010;
 const MAX_BUFFER_SIZE = 6 * 1024 * 1024; // 7MB
 
 // ─── Upstream concurrency control ────────────────────────────────────────────
